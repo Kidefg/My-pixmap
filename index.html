@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Pixel Multiplayer</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #ddd; font-family: sans-serif; }
+        canvas { 
+            display: block; 
+            background: white; 
+            image-rendering: pixelated; /* Отключает размытие пикселей */
+            cursor: crosshair;
+            box-shadow: 0 0 20px rgba(0,0,0,0.2);
+            margin: auto;
+        }
+        .controls { 
+            position: fixed; top: 10px; left: 10px; 
+            background: white; padding: 15px; border-radius: 8px; 
+            display: flex; flex-direction: column; gap: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+
+<div class="controls">
+    <strong>Pixmap Clone</strong>
+    <input type="color" id="colorPicker" value="#ff0000">
+    <button onclick="clearCanvas()">Очистить (локально)</button>
+    <div id="status">Подключение...</div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const colorPicker = document.getElementById('colorPicker');
+    const status = document.getElementById('status');
+
+    // Настройки сетки
+    const PIXEL_SIZE = 15; // Размер одного "пикселя" в реальных пикселях экрана
+    const COLS = 50;       // Ширина холста в клетках
+    const ROWS = 50;       // Высота холста в клетках
+
+    canvas.width = COLS * PIXEL_SIZE;
+    canvas.height = ROWS * PIXEL_SIZE;
+
+    // Подключение к серверу (укажи свой URL после деплоя)
+    const socket = io('http://localhost:3000'); 
+
+    socket.on('connect', () => {
+        status.innerText = "В сети ✅";
+        status.style.color = "green";
+    });
+
+    // Рисуем пиксель, пришедший от другого игрока
+    socket.on('draw', (data) => {
+        drawPixel(data.col, data.row, data.color, false);
+    });
+
+    // Функция рисования квадрата
+    function drawPixel(col, row, color, emit) {
+        ctx.fillStyle = color;
+        // Закрашиваем ровный квадрат по сетке
+        ctx.fillRect(col * PIXEL_SIZE, row * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE);
+
+        if (emit) {
+            socket.emit('draw', { col, row, color });
+        }
+    }
+
+    // Обработка клика и зажатой мыши
+    let isDrawing = false;
+
+    function handleInput(e) {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        // Вычисляем, в какую колонку и строку попал клик
+        const col = Math.floor(x / PIXEL_SIZE);
+        const row = Math.floor(y / PIXEL_SIZE);
+
+        if (col >= 0 && col < COLS && row >= 0 && row < ROWS) {
+            drawPixel(col, row, colorPicker.value, true);
+        }
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+        isDrawing = true;
+        handleInput(e);
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+        if (isDrawing) handleInput(e);
+    });
+
+    window.addEventListener('mouseup', () => isDrawing = false);
+
+    function clearCanvas() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+</script>
+</body>
+</html>
